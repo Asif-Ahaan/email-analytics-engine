@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 30px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #7c3aed;
+      margin-bottom: 8px;
+    }
+    .subtitle { color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .card .value {
+      font-size: 36px;
+      font-weight: 800;
+      color: #7c3aed;
+    }
+    .card .label {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .section {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .section h2 { font-size: 16px; color: #cbd5e1; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { color: #7c3aed; text-align: left; padding: 8px; border-bottom: 1px solid #2d3148; }
+    td { padding: 8px; color: #94a3b8; border-bottom: 1px solid #1a1f35; }
+    tr:hover td { background: #252a40; }
+    canvas { max-height: 250px; }
+    .loading { color: #64748b; text-align: center; padding: 40px; }
+    .refresh-btn {
+      background: #7c3aed;
+      color: white;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      float: right;
+      margin-top: -4px;
+    }
+    .refresh-btn:hover { background: #6d28d9; }
+  </style>
+</head>
+<body>
+  <h1>📧 Email Analytics</h1>
+  <p class="subtitle">Real-time tracking dashboard</p>
+
+  <div class="cards">
+    <div class="card"><div class="value" id="totalSent">—</div><div class="label">Emails Sent</div></div>
+    <div class="card"><div class="value" id="totalOpens">—</div><div class="label">Total Opens</div></div>
+    <div class="card"><div class="value" id="openRate">—</div><div class="label">Open Rate %</div></div>
+    <div class="card"><div class="value" id="uniqueOpeners">—</div><div class="label">Unique Openers</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Opens by Hour <button class="refresh-btn" onclick="loadData()">↻ Refresh</button></h2>
+    <canvas id="hourChart"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Recent Opens</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Email</th><th>Opened At</th></tr></thead>
+      <tbody id="logsTable"><tr><td colspan="3" class="loading">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <script>
+    let chart;
+
+    function loadData() {
+      google.script.run
+        .withSuccessHandler(renderDashboard)
+        .withFailureHandler(err => console.error(err))
+        .getAnalyticsData();
+    }
+
+    function renderDashboard(data) {
+      document.getElementById("totalSent").textContent     = data.totalSent;
+      document.getElementById("totalOpens").textContent    = data.totalOpens;
+      document.getElementById("openRate").textContent      = data.openRate + "%";
+      document.getElementById("uniqueOpeners").textContent = data.uniqueOpeners;
+
+      // Chart
+      const hours  = Array.from({length: 24}, (_, i) => i + ":00");
+      const counts = Array.from({length: 24}, (_, i) => data.byHour[i] || 0);
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("hourChart"), {
+        type: "bar",
+        data: {
+          labels: hours,
+          datasets: [{
+            label: "Opens",
+            data: counts,
+            backgroundColor: "#7c3aed88",
+            borderColor: "#7c3aed",
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#64748b" }, grid: { color: "#1a1f35" } },
+            y: { ticks: { color: "#64748b" }, grid: { color: "#1a1f35" }, beginAtZero: true }
+          }
+        }
+      });
+
+      // Table
+      const tbody = document.getElementById("logsTable");
+      if (data.recentLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="loading">No opens yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.recentLogs.map(log => `
+        <tr>
+          <td>${log.id}</td>
+          <td>${log.email}</td>
+          <td>${log.time}</td>
+        </tr>
+      `).join("");
+    }
+
+    loadData();
+    setInterval(loadData, 30000); // auto-refresh every 30s
+  </script>
+</body>
+</html>
